@@ -1,10 +1,34 @@
-/api_keys.env
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Media files
+media/
+
+# Environment variables
+.env
+api_keys.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
 /openAI.env
 /DjangoProjectBase2/*
 /TutorialGoogle/*
 /movie_pictures/*
 /open_ai_api_keys.env
-/.env
 /*.env
 /images.zip
 /DjangoProjectBase/openAI.env
