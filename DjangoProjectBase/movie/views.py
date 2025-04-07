@@ -1,12 +1,17 @@
 from django.shortcuts import render
 from django.http import HttpResponse
-
 from .models import Movie
-
 import matplotlib.pyplot as plt
 import matplotlib
 import io
 import urllib, base64
+import os
+import numpy as np
+from openai import OpenAI
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv('api_keys.env')
 
 def home(request):
     #return HttpResponse('<h1>Welcome to Home Page</h1>')
@@ -123,3 +128,67 @@ def generate_bar_chart(data, xlabel, ylabel):
     buffer.close()
     graphic = base64.b64encode(image_png).decode('utf-8')
     return graphic
+
+def recommendations_view(request):
+    prompt = request.GET.get('prompt', '')
+    movies = []
+    error_message = None
+    
+    if prompt:
+        try:
+            print(f"Procesando prompt: {prompt}")
+            
+            # Obtener el embedding del prompt
+            api_key = os.environ.get('openai_apikey')
+            if not api_key:
+                raise ValueError("No se encontró la clave de API de OpenAI en las variables de entorno")
+            
+            client = OpenAI(api_key=api_key)
+            print("Cliente OpenAI creado")
+            
+            response = client.embeddings.create(
+                input=[prompt],
+                model="text-embedding-3-small"
+            )
+            prompt_embedding = np.array(response.data[0].embedding, dtype=np.float32)
+            print(f"Embedding del prompt generado, dimensiones: {prompt_embedding.shape}")
+            
+            # Obtener todas las películas
+            all_movies = Movie.objects.all()
+            print(f"Total de películas en la base de datos: {all_movies.count()}")
+            
+            # Calcular similitud con cada película
+            movie_similarities = []
+            for movie in all_movies:
+                if movie.emb:
+                    try:
+                        movie_embedding = np.frombuffer(movie.emb, dtype=np.float32)
+                        similarity = np.dot(prompt_embedding, movie_embedding) / (
+                            np.linalg.norm(prompt_embedding) * np.linalg.norm(movie_embedding)
+                        )
+                        movie_similarities.append((movie, similarity))
+                        print(f"Similitud calculada para {movie.title}: {similarity}")
+                    except Exception as e:
+                        print(f"Error procesando película {movie.title}: {str(e)}")
+                else:
+                    print(f"Película {movie.title} no tiene embedding")
+            
+            print(f"Total de similitudes calculadas: {len(movie_similarities)}")
+            
+            # Ordenar por similitud y tomar la más similar
+            movie_similarities.sort(key=lambda x: x[1], reverse=True)
+            if movie_similarities:
+                movies = [movie_similarities[0][0]]  # Solo tomar la primera película (la más similar)
+                print(f"Película recomendada seleccionada: {movies[0].title}")
+            else:
+                error_message = "No se encontraron películas con embeddings para comparar."
+                
+        except Exception as e:
+            error_message = f"Error generando recomendaciones: {str(e)}"
+            print(f"Error: {str(e)}")
+    
+    return render(request, 'recommendations.html', {
+        'movies': movies,
+        'prompt': prompt,
+        'error_message': error_message
+    })
